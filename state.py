@@ -10,7 +10,6 @@ class StateType(Enum):
     END_OF_TURN = 4
     FINAL = 5
 
-
 class Category(Enum):
     ONES = 1
     TWOS = 2
@@ -26,6 +25,21 @@ class Category(Enum):
     YAHTZEE = 12
     CHANCE = 13
 
+categories = {
+  "ONES": Category.ONES,
+  "TWOS": Category.TWOS,
+  "THREES": Category.THREES,
+  "FOURS": Category.FOURS,
+  "FIVES": Category.FIVES,
+  "SIXES": Category.SIXES,
+  "THREE_OF_A_KIND": Category.THREE_OF_A_KIND,
+  "FOUR_OF_A_KIND": Category.FOUR_OF_A_KIND,
+  "FULL_HOUSE": Category.FULL_HOUSE,
+  "SMALL_STRAIGHT": Category.SMALL_STRAIGHT,
+  "LARGE_STRAIGHT": Category.LARGE_STRAIGHT,
+  "YAHTZEE": Category.YAHTZEE,
+  "CHANCE": Category.CHANCE
+}
 
 class State:
     def __init__(self):
@@ -49,4 +63,20 @@ class State:
             Category.LARGE_STRAIGHT: -1,
             Category.YAHTZEE: -1,
             Category.CHANCE: -1
-        }] * 2
+        },
+          {
+              Category.ONES: -1,
+              Category.TWOS: -1,
+              Category.THREES: -1,
+              Category.FOURS: -1,
+              Category.FIVES: -1,
+              Category.SIXES: -1,
+              Category.THREE_OF_A_KIND: -1,
+              Category.FOUR_OF_A_KIND: -1,
+              Category.FULL_HOUSE: -1,
+              Category.SMALL_STRAIGHT: -1,
+              Category.LARGE_STRAIGHT: -1,
+              Category.YAHTZEE: -1,
+              Category.CHANCE: -1
+          }
+        ]
