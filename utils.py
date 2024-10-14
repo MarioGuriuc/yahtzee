@@ -3,7 +3,6 @@ import tkinter as tk
 
 
 def load_and_resize_image(image_path, size):
-	"""Helper function to load and resize an image."""
 	image = Image.open(image_path)
 	resized_image = image.resize(size, Image.DEFAULT_STRATEGY)
 	return ImageTk.PhotoImage(resized_image)
