@@ -1,4 +1,3 @@
-
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 780
 
@@ -10,7 +9,6 @@ DICE_NAMES = ["one", "two", "three", "four", "five", "six"]
 DICE_ROLL_DURATION = 1000
 DICE_HOLD_DURATION = 1000
 DICE_ROLL_INTERVAL = 50
-
 
 HUMAN_IMAGE_PATH = "img/human_photo.png"
 AI_IMAGE_PATH = "img/ai_photo.png"
