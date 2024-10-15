@@ -130,7 +130,7 @@ class YahtzeeApp:
     """GUI"""
     def start_roll_animation(self) -> None:
         if self.game.state.rolls_left != 0:
-            self.roll_dice_button.config(state=tk.DISABLED)
+            self.roll_dice_button.config(state=tk.DISABLED) if self.game.state.turn == 0 else None
             end_time = time.time() + 1
 
             def roll_step():
@@ -155,7 +155,7 @@ class YahtzeeApp:
             self.draw_dice()
             self.update_possible_score_labels()
             self.update_rolls_left_label()
-            self.roll_dice_button.config(state=tk.NORMAL)
+            self.roll_dice_button.config(state=tk.NORMAL) if self.game.state.turn == 0 else None
 
     def toggle_dice_hold(self, dice_index: int) -> None:
         if dice_index < len(self.game.state.dice_on_table) and self.game.state.turn == 0:
@@ -172,6 +172,7 @@ class YahtzeeApp:
     def on_score_push(self, category) -> None:
         if (self.game.state.categories[self.game.state.turn][category] == -1
                 and self.game.state.state_type != StateType.INITIAL):
+            self.roll_dice_button.config(state=tk.DISABLED)
             self.game.score(category)
             self.update_score_label(category, self.game.state.categories[self.game.state.turn][category])
             self.end_turn()
@@ -206,6 +207,7 @@ class YahtzeeApp:
 
         match action:
             case "score":
+                self.roll_dice_button.config(state=tk.NORMAL)
                 category = self.game.ai.choose_category(self.game.state)
                 self.ai_action_label.config(text="AI" + (self.game.score(category)))
                 self.update_score_label(category, self.game.state.categories[self.game.state.turn][category])
@@ -214,7 +216,7 @@ class YahtzeeApp:
             case "roll":
                 self.root.after(DICE_ROLL_DURATION, self.start_roll_animation)
             case "hold":
-                self.root.after(DICE_ROLL_DURATION, self.ai_hold_dice)
+                self.ai_hold_dice()
 
     def ai_hold_dice(self) -> None:
         dice_to_hold = self.game.ai.choose_hold(self.game.state.dice_on_table)

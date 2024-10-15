@@ -5,9 +5,8 @@ class StateType(Enum):
     INITIAL = 0
     ROLLING = 1
     HOLDING = 2
-    SCORING = 3
-    END_OF_TURN = 4
-    FINAL = 5
+    END_OF_TURN = 3
+    FINAL = 4
 
 
 class Category(Enum):
