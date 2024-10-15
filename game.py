@@ -168,7 +168,7 @@ class Yahtzee:
         self.state.rolls_left -= 1
         self.state.dice_on_table = [random.randint(1, 6) for _ in
                                     range(len(self.state.dice_on_table) if self.state.dice_on_table else 5)]
-        if self.state.rolls_left == 0: #referinta
+        if self.state.rolls_left == 0:
             self.state.state_type = StateType.HOLDING
 
     def hold(self, index: int):
@@ -224,7 +224,7 @@ class Yahtzee:
 
         self.state.categories[self.state.turn][category] = score
         self.state.score[self.state.turn] += score
-        self.state.state_type = StateType.END_OF_TURN #referinta
+        self.state.state_type = StateType.END_OF_TURN
         return f" scored {score} in category {category.name}"
 
     def end_turn(self):
@@ -234,14 +234,14 @@ class Yahtzee:
             self.new_turn()
 
     def new_turn(self):
-        self.state.state_type = StateType.INITIAL #referinta
+        self.state.state_type = StateType.INITIAL
         self.state.turn = 1 - self.state.turn
         self.state.rolls_left = 3
         self.state.dice_held = []
         self.state.dice_on_table = [1, 2, 3, 4, 5]
 
     def end_game(self):
-        self.state.state_type = StateType.FINAL #referinta
+        self.state.state_type = StateType.FINAL
 
     def is_game_finished(self) -> bool:
         for category, score in self.state.categories[1 - self.state.turn].items():
@@ -250,7 +250,7 @@ class Yahtzee:
         return True
 
     def reset(self):
-        self.state.state_type = StateType.INITIAL #referinta
+        self.state.state_type = StateType.INITIAL
         self.state = State()
         self.state.turn = 0
         self.state.score = {0: 0, 1: 0}
