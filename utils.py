@@ -1,5 +1,6 @@
-from PIL import Image, ImageTk
 import tkinter as tk
+
+from PIL import Image, ImageTk
 
 
 def load_and_resize_image(image_path, size):
