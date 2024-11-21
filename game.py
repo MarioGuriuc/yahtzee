@@ -24,18 +24,18 @@ class YahtzeeAIBase(ABC):
 
 	@staticmethod
 	def get_possible_actions(state: State) -> list[Action]:
-		actions = []
 		if state.rolls_left == 0:
 			return [Action.SCORE]
 
+		actions = []
 		if state.rolls_left > 0:
 			actions.append(Action.ROLL)
 		if len(state.dice_on_table) > 0 and state.rolls_left < 3:
 			actions.append(Action.HOLD)
+			actions.append(Action.SCORE)
 		if len(state.dice_held) != 0:
 			actions.append(Action.RELEASE)
-
-		actions.append(Action.SCORE)
+			actions.append(Action.SCORE)
 
 		return actions
 
