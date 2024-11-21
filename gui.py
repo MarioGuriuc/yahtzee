@@ -6,10 +6,8 @@ from utils import *
 
 
 class YahtzeeApp:
-	def __init__(self, root_param: tk.Tk):
-		self.ai_photo = None
-		self.human_photo = None
-		self.game = Yahtzee()
+	def __init__(self, root_param: tk.Tk, game: Yahtzee):
+		self.game = game
 		self.root = root_param
 		self.root.title("Yahtzee")
 		self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
@@ -17,8 +15,10 @@ class YahtzeeApp:
 		self.ai_score_labels = {}
 		self.score_buttons = {}
 		self.total_score_labels = {}
+		self.ai_photo = None
+		self.human_photo = None
 
-		self.canvas = tk.Canvas(self.root, width=1280, height=760)
+		self.canvas = tk.Canvas(self.root, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
 		self.canvas.pack()
 
 		self.roll_dice_button = create_new_button(self.root, "Roll Dice", self.start_roll_animation, ROLL_BUTTON_X,
@@ -55,7 +55,6 @@ class YahtzeeApp:
 			dice_image = load_dice_image(i, size=(80, 80))
 			self.dice_images.append(dice_image)
 			x, y = DICE_POSITIONS_ON_TABLE[i]
-
 			dice_id = self.canvas.create_image(x, y, image=dice_image, anchor=tk.NW)
 			self.canvas.tag_bind(dice_id)
 
@@ -132,7 +131,7 @@ class YahtzeeApp:
 	"""GUI"""
 
 	def start_roll_animation(self) -> None:
-		if self.game.state.rolls_left != 0:
+		if self.game.state.rolls_left > 0:
 			self.roll_dice_button.config(state=tk.DISABLED) if self.game.state.turn == 0 else None
 			end_time = time.time() + 1
 
@@ -175,10 +174,10 @@ class YahtzeeApp:
 
 	def on_score_push(self, category) -> None:
 		if (self.game.state.categories[self.game.state.turn][category] == -1
-				and self.game.state.state_type != StateType.INITIAL):
+				and self.game.state.state_type != StateType.INITIAL and self.game.state.turn == 0):
 			self.roll_dice_button.config(state=tk.DISABLED)
-			self.game.score(category)
-			self.update_score_label(category, self.game.state.categories[self.game.state.turn][category])
+			score = self.game.score(category)
+			self.update_score_label(category, score)
 			self.end_turn()
 			self.ai_action()
 			self.score_buttons[category].config(state=tk.DISABLED, bg="lightgray")
@@ -199,7 +198,7 @@ class YahtzeeApp:
 	def update_possible_score_labels(self) -> None:
 		for category in self.game.state.categories[0]:
 			if self.game.state.categories[self.game.state.turn][category] == -1:
-				score = self.game.ai.simulate_score(category, self.game.state)
+				score = self.game.calculate_score(category)
 				self.score_labels[category].config(text=str(score), fg="green") if self.game.state.turn == 0 else \
 					self.ai_score_labels[category].config(text=str(score), fg="green")
 
@@ -208,21 +207,24 @@ class YahtzeeApp:
 
 	def ai_action(self) -> None:
 		action = self.game.ai.choose_action(self.game.state)
-
 		match action:
-			case "score":
-				self.roll_dice_button.config(state=tk.NORMAL)
-				category = self.game.ai.choose_category(self.game.state)
-				self.ai_action_label.config(text="AI" + (self.game.score(category)))
-				self.update_score_label(category, self.game.state.categories[self.game.state.turn][category])
-				self.end_turn()
-				self.update_rolls_left_label()
-			case "roll":
+			case Action.ROLL:
 				self.root.after(DICE_ROLL_DURATION, self.start_roll_animation)
-			case "hold":
+			case Action.SCORE:
+				self.ai_score()
+			case Action.HOLD:
 				self.ai_hold_dice()
-			case "release":
+			case Action.RELEASE:
 				self.ai_release_dice()
+
+	def ai_score(self):
+		self.roll_dice_button.config(state=tk.NORMAL)
+		category = self.game.ai.choose_category(self.game.state)
+		score = self.game.score(category)
+		self.ai_action_label.config(text=f"AI scored {str(score)} in {category.name}!")
+		self.update_score_label(category, score)
+		self.end_turn()
+		self.update_rolls_left_label()
 
 	def ai_release_dice(self) -> None:
 		dice_to_release = self.game.ai.choose_release(self.game.state.dice_held)
@@ -253,12 +255,14 @@ class YahtzeeApp:
 		self.root.after(len(dice_to_hold) * DICE_HOLD_DURATION + DICE_HOLD_DURATION, self.ai_action)
 
 	def end_turn(self) -> None:
-		self.game.end_turn()
-		self.draw_dice()
-		if self.game.state.state_type == StateType.FINAL:
+		if self.game.is_game_finished():
 			winner = "AI" if self.game.state.score[1] > self.game.state.score[0] else "You"
 			create_new_label(self.root, f"{winner} won!", 460, 430, 101, 41)
 			create_new_button(self.root, "Play Again", self.reset_game, 460, 480, 101, 41)
+		else:
+			self.game.end_turn()
+			self.update_rolls_left_label()
+			self.draw_dice()
 
 	def reset_game(self) -> None:
 		self.game.reset()
@@ -281,5 +285,6 @@ class YahtzeeApp:
 
 if __name__ == "__main__":
 	root = tk.Tk()
-	app = YahtzeeApp(root)
+	ai = RandomYahtzeeAI()
+	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()

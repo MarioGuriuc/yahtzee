@@ -1,6 +1,7 @@
 import tkinter as tk
 
 from PIL import Image, ImageTk
+from state import Category, categories
 
 
 def load_and_resize_image(image_path, size):

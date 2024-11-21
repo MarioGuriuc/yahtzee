@@ -7,6 +7,13 @@ class StateType(Enum):
 	FINAL = 2
 
 
+class Action(Enum):
+	ROLL = 0
+	HOLD = 1
+	RELEASE = 2
+	SCORE = 3
+
+
 class Category(Enum):
 	ONES = 1
 	TWOS = 2
@@ -36,24 +43,11 @@ categories = {
 	"SMALL_STRAIGHT": Category.SMALL_STRAIGHT,
 	"LARGE_STRAIGHT": Category.LARGE_STRAIGHT,
 	"YAHTZEE": Category.YAHTZEE,
-	"CHANCE": Category.CHANCE
+	"CHANCE": Category.CHANCE,
+
 }
 
-empty_category_dict = {
-	Category.ONES: -1,
-	Category.TWOS: -1,
-	Category.THREES: -1,
-	Category.FOURS: -1,
-	Category.FIVES: -1,
-	Category.SIXES: -1,
-	Category.THREE_OF_A_KIND: -1,
-	Category.FOUR_OF_A_KIND: -1,
-	Category.FULL_HOUSE: -1,
-	Category.SMALL_STRAIGHT: -1,
-	Category.LARGE_STRAIGHT: -1,
-	Category.YAHTZEE: -1,
-	Category.CHANCE: -1
-}
+empty_category_dict = {cat: -1 for cat in Category}
 
 
 class State:
