@@ -59,3 +59,6 @@ class State:
 		self.dice_held: list[int] = []
 		self.dice_on_table: list[int] = [1, 2, 3, 4, 5]
 		self.categories: list[dict[Category, int]] = [empty_category_dict.copy(), empty_category_dict.copy()]
+  
+	def get_state_tuple(self):
+		return (self.turn, self.rolls_left, tuple(self.dice_on_table), tuple(self.dice_held))

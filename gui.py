@@ -3,6 +3,7 @@ import time
 from constants import *
 from game import *
 from utils import *
+from q_learning import *
 
 
 class YahtzeeApp:
@@ -285,6 +286,8 @@ class YahtzeeApp:
 
 if __name__ == "__main__":
 	root = tk.Tk()
-	ai = RandomYahtzeeAI()
+	# ai = RandomYahtzeeAI()
+	ai = QLearningYahtzee()
+	train_ai(ai, max_turns=20, num_episodes=10000)
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()
