@@ -27,6 +27,8 @@ class YahtzeeAIBase(ABC):
 		actions = []
 		if state.rolls_left == 0:
 			return [Action.SCORE]
+		if state.rolls_left == 3:
+			return [Action.ROLL]
 
 		if state.rolls_left > 0:
 			actions.append(Action.ROLL)

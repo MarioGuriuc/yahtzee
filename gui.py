@@ -208,6 +208,7 @@ class YahtzeeApp:
 
 	def ai_action(self) -> None:
 		action = self.game.ai.choose_action(self.game.state)
+		print(action)
 		match action:
 			case Action.ROLL:
 				self.root.after(DICE_ROLL_DURATION, self.start_roll_animation)
@@ -228,7 +229,7 @@ class YahtzeeApp:
 		self.update_rolls_left_label()
 
 	def ai_release_dice(self) -> None:
-		dice_to_release = self.game.ai.choose_release(self.game.state.dice_held)
+		dice_to_release = self.game.ai.choose_release(self.game.state)
 
 		def release_dice_with_delay(index):
 			if index < len(dice_to_release):
@@ -242,7 +243,7 @@ class YahtzeeApp:
 		self.root.after(len(dice_to_release) * DICE_HOLD_DURATION + DICE_HOLD_DURATION, self.ai_action)
 
 	def ai_hold_dice(self) -> None:
-		dice_to_hold = self.game.ai.choose_hold(self.game.state.dice_on_table)
+		dice_to_hold = self.game.ai.choose_hold(self.game.state)
 
 		def hold_dice_with_delay(index):
 			if index < len(dice_to_hold):
@@ -288,6 +289,6 @@ if __name__ == "__main__":
 	root = tk.Tk()
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
-	train_ai(ai, max_turns=20, num_episodes=10000)
+	train_ai(ai, max_turns=24, num_episodes=10000)
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()
