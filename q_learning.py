@@ -1,3 +1,9 @@
+import copy
+import itertools
+import threading
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 from game import *
 from state import *
@@ -6,10 +12,10 @@ from state import Category
 
 class QLearningYahtzee(YahtzeeAIBase):
     def __init__(self):
-        self.alpha = 0.9  # Learning rate
-        self.gamma = 0.95  # Discount factor
+        self.alpha = 0.5  # Learning rate
+        self.gamma = 0.9  # Discount factor
         self.epsilon = 1.0  # Exploration probability
-        self.epsilon_decay = 0.999999999  # Decay rate
+        self.epsilon_decay = 0.9999  # Decay rate
         self.min_epsilon = 0.01  # exploration
         self.q_table = {}  # Q-table
 
@@ -18,18 +24,24 @@ class QLearningYahtzee(YahtzeeAIBase):
         if state_tuple not in self.q_table:
             self.q_table[state_tuple] = np.zeros(len(Action))
         return self.q_table[state_tuple][action.value]
+    
+    def get_max_q_value(self, state: State) -> float:
+        state_tuple = state.get_state_tuple()
+        if state_tuple not in self.q_table:
+            self.q_table[state_tuple] = np.zeros(len(Action))
+        return np.max(self.q_table[state_tuple])
+    
+    def update_q_state_tuple(self,state: State):
+        state_tuple = state.get_state_tuple()
+        if state_tuple not in self.q_table:
+            self.q_table[state_tuple] = np.zeros(len(Action))
 
     def update_q_value(self, state: State, action: Action, reward: float, next_state: State):
         state_tuple = state.get_state_tuple()
-        next_state_tuple = next_state.get_state_tuple()
+        self.update_q_state_tuple(state)
 
-        if state_tuple not in self.q_table:
-            self.q_table[state_tuple] = np.zeros(len(Action))
-        if next_state_tuple not in self.q_table:
-            self.q_table[next_state_tuple] = np.zeros(len(Action))
-
-        max_future_q = np.max(self.q_table[next_state_tuple])
-        current_q = self.q_table[state_tuple][action.value]
+        max_future_q = self.get_max_q_value(next_state)
+        current_q = self.get_q_value(state, action)
 
         self.q_table[state_tuple][action.value] = current_q + self.alpha * (
             reward + self.gamma * max_future_q - current_q
@@ -43,8 +55,7 @@ class QLearningYahtzee(YahtzeeAIBase):
             return random.choice(self.get_possible_actions(state))
         else:
             state_tuple = state.get_state_tuple()
-            if state_tuple not in self.q_table:
-                self.q_table[state_tuple] = np.zeros(len(Action))
+            self.update_q_state_tuple(state)
             return Action(np.argmax(self.q_table[state_tuple]))
     
     def choose_category(self, state: State) -> Category | None:
@@ -57,89 +68,153 @@ class QLearningYahtzee(YahtzeeAIBase):
             return None
         return max(available_categories, key=lambda x: x[1])[0]
     
-    def choose_hold(self, state: State) -> list[int]:
-        dice_to_hold = []
-        for die in state.dice_on_table:
-            if die >= 4:
-                dice_to_hold.append(die)
-            elif np.random.rand() < self.epsilon:
-                dice_to_hold.append(die)
         
-        return dice_to_hold
+    def choose_hold(self, state: State) -> list[int]:
+        all_dice = state.dice_on_table
+        best_hold = []
+        max_q_value = float('-inf')
+        
+        q_table_index = defaultdict(list)
+        for state_tuple, q_values in self.q_table.items():
+            _, table_dice, held_dice = state_tuple
+            combined_dice = tuple(sorted(table_dice + held_dice))
+            q_table_index[combined_dice].append((state_tuple, q_values))
+        
+        def process_subset(subset):
+            nonlocal max_q_value, best_hold
+            subset_set = set(subset)
+            
+            for combined_dice, states in q_table_index.items():
+                if subset_set.issubset(combined_dice):
+                    for state_tuple, q_values in states:
+                        q_value = max(q_values)
+                        if q_value > max_q_value:
+                            max_q_value = q_value
+                            best_hold = list(subset)
+        
+        subsets = [list(subset) for r in range(len(all_dice) + 1)
+                   for subset in itertools.combinations(all_dice, r)]
+        with ThreadPoolExecutor() as executor:
+            executor.map(process_subset, subsets)
+        
+        if not best_hold:
+            best_hold = [die for die in state.dice_on_table if die >= 4]
+        
+        return best_hold
     
     def choose_release(self, state: State) -> list[int]:
-        dice_to_release = []
-        for die in state.dice_held:
-            q_value = self.get_q_value(state, Action.RELEASE)
-            if np.random.rand() < self.epsilon:
-                if np.random.rand() < 0.5:
-                    dice_to_release.append(die)
-            elif q_value > 0:
-                dice_to_release.append(die)
-        return dice_to_release
+        dice_held = state.dice_held
+        best_release = []
+        max_q_value = float('-inf')
+        
+        q_table_index = defaultdict(list)
+        for state_tuple, q_values in self.q_table.items():
+            _, table_dice, held_dice = state_tuple
+            combined_dice = tuple(sorted(table_dice + held_dice))
+            q_table_index[combined_dice].append((state_tuple, q_values))
+        
+        def process_subset(subset):
+            nonlocal max_q_value, best_release
+            subset_set = set(subset)
+            
+            for combined_dice, states in q_table_index.items():
+                if subset_set.issubset(combined_dice):
+                    for state_tuple, q_values in states:
+                        q_value = q_values[Action.RELEASE]
+                        if q_value > max_q_value:
+                            max_q_value = q_value
+                            best_release = list(subset)
+        
+        subsets = [list(subset) for r in range(len(dice_held) + 1)
+                   for subset in itertools.combinations(dice_held, r)]
+        with ThreadPoolExecutor() as executor:
+            executor.map(process_subset, subsets)
+        
+        if not best_release:
+            best_release = []
+        
+        return best_release
+    
+def train_ai(ai: QLearningYahtzee, num_episodes: int = 1000, max_turns: int = 24, num_threads: int = 4):
+    lock = threading.Lock()
+    total_rewards = [0] * num_episodes
+
+    def train_in_thread(thread_id: int, start_episode: int, end_episode: int):
+        nonlocal total_rewards
+        local_ai = copy.deepcopy(ai)
+        for episode in range(start_episode, end_episode):
+            game = Yahtzee(local_ai)
+            state = game.state
+            total_reward = 0
+
+            for turn in range(max_turns):
+
+                action = local_ai.choose_action(state)
+                reward = 0
+
+                match action:
+                    case Action.ROLL:
+                        game.roll()
+
+                    case Action.HOLD:
+                        dice_to_hold = local_ai.choose_hold(state)
+                        if not dice_to_hold:
+                            reward += -5
+                        else:
+                            for die in dice_to_hold:
+                                game.hold(state.dice_on_table.index(die))
+                            reward += 2 * len(dice_to_hold)
+
+                    case Action.RELEASE:
+                        dice_to_release = local_ai.choose_release(state)
+                        for die in dice_to_release:
+                            game.release(state.dice_held.index(die))
+                        reward += -2 * len(dice_to_release)
+
+                    case Action.SCORE:
+                        category = local_ai.choose_category(state)
+                        if category:
+                            reward += game.score(category)
+                        else:
+                            reward = -10
+
+                next_state = game.state
+
+                with lock:
+                    ai.update_q_value(state, action, reward, next_state)
+
+                total_reward += reward
+                state = next_state
+                local_ai.decay_epsilon()
+
+            total_rewards[episode] = total_reward
+
+            if (episode + 1) % 100 == 0:
+                print(f"Thread {thread_id}: Episode {episode + 1}, Reward: {total_reward},Epsilon: {local_ai.epsilon}")
+
+    episodes_per_thread = num_episodes // num_threads
+    extra_episodes = num_episodes % num_threads
+
+    ranges = []
+    start = 0
+    for i in range(num_threads):
+        end = start + episodes_per_thread + (1 if i < extra_episodes else 0)
+        ranges.append((start, end))
+        start = end
+
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = [
+            executor.submit(train_in_thread, i, start, end)
+            for i, (start, end) in enumerate(ranges)
+        ]
+
+        for future in futures:
+            future.result()
+
+    print("Multithreaded training complete!")
 
 
 
 
-def train_ai(ai: QLearningYahtzee, num_episodes: int, max_turns: int = 13):
-    for episode in range(num_episodes):
-        game = Yahtzee(ai)
-        state = game.state
-        total_reward = 0
-        consecutive_hold_penalty_count = 0
-
-        for turn in range(max_turns):
-            if game.is_game_finished():
-                break
-
-            action = ai.choose_action(state)
-            reward = 0
-
-            if action == Action.ROLL:
-                if state.rolls_left == 0:
-                    reward = -20
-                else:
-                    game.roll()
-                    reward = -1
-                consecutive_hold_penalty_count = 0
-
-            elif action == Action.HOLD:
-                dice_to_hold = ai.choose_hold(state)
-                if not dice_to_hold:
-                    reward = -10
-                else:
-                    for die in dice_to_hold:
-                        game.hold(state.dice_on_table.index(die))
-                    reward = 2 * len(dice_to_hold)
-
-                consecutive_hold_penalty_count += 1
-                if consecutive_hold_penalty_count > 1:
-                    reward -= 10 * consecutive_hold_penalty_count
-
-            elif action == Action.RELEASE:
-                dice_to_release = ai.choose_release(state)
-                for die in dice_to_release:
-                    game.release(state.dice_held.index(die))
-                reward = -2 * len(dice_to_release)
-                consecutive_hold_penalty_count = 0
-
-            elif action == Action.SCORE:
-                category = ai.choose_category(state)
-                if category:
-                    reward = game.score(category)
-                else:
-                    reward = -10
-                consecutive_hold_penalty_count = 0
-
-            next_state = game.state
-            ai.update_q_value(state, action, reward, next_state)
-            total_reward += reward
-            state = next_state
-            ai.decay_epsilon()
-
-        if episode % 100 == 0:
-            print(f"Episode {episode + 1}, Total Reward: {total_reward}, Epsilon: {ai.epsilon:.4f}")
-
-    print("Training complete!")
 
 

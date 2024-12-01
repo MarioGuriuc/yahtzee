@@ -12,6 +12,20 @@ class Action(Enum):
 	HOLD = 1
 	RELEASE = 2
 	SCORE = 3
+	
+class HoldOption(Enum):
+	HOLD0 = 0
+	HOLD1 = 1
+	HOLD2 = 2
+	HOLD3 = 3
+	HOLD4 = 4
+
+class ReleaseOption(Enum):
+	RELEASE0 = 0
+	RELEASE1 = 1
+	RELEASE2 = 2
+	RELEASE3 = 3
+	RELEASE4 = 4
 
 
 class Category(Enum):
@@ -61,7 +75,7 @@ class State:
 		self.categories: list[dict[Category, int]] = [empty_category_dict.copy(), empty_category_dict.copy()]
   
 	def get_state_tuple(self):
-		return self.turn, self.rolls_left, tuple(self.dice_on_table), tuple(self.dice_held)
+		return self.rolls_left, tuple(self.dice_on_table), tuple(self.dice_held)
 	
 	def calculate_score(self,Category):
 		dice = self.dice_on_table + self.dice_held

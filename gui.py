@@ -289,6 +289,6 @@ if __name__ == "__main__":
 	root = tk.Tk()
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
-	train_ai(ai, max_turns=24, num_episodes=10000)
+	train_ai(ai, 10000, 24,4)
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()
