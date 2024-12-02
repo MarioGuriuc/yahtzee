@@ -3,7 +3,7 @@ import itertools
 import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-
+import pandas as pd
 import numpy as np
 from game import *
 from state import *
@@ -18,6 +18,7 @@ class QLearningYahtzee(YahtzeeAIBase):
         self.epsilon_decay = 0.9999  # Decay rate
         self.min_epsilon = 0.01  # exploration
         self.q_table = {}  # Q-table
+        self.q_table_file = "q_table.csv"
 
     def get_q_value(self, state: State, action: Action) -> float:
         state_tuple = state.get_state_tuple()
@@ -134,6 +135,27 @@ class QLearningYahtzee(YahtzeeAIBase):
             best_release = []
         
         return best_release
+    
+    def save_q_table(self):
+        rows = []
+        for state_tuple, q_values in self.q_table.items():
+            row = list(state_tuple) + list(q_values)
+            rows.append(row)
+        
+        columns = [f"State_{i}" for i in range(len(rows[0]) - len(Action))] + [
+                f"Q_Action_{action.name}" for action in Action
+        ]
+        df = pd.DataFrame(rows, columns=columns)
+        df.to_csv(self.q_table_file, index=False)
+        print("Q-table saved to", self.q_table_file)
+    
+    def load_q_table(self):
+        df = pd.read_csv(self.q_table_file)
+        for _, row in df.iterrows():
+            state_tuple = tuple(row[f"State_{i}"] for i in range(len(row) - len(Action)))
+            q_values = row[[f"Q_Action_{action.name}" for action in Action]].values
+            self.q_table[state_tuple] = q_values
+        print("Q-table loaded from", self.q_table_file)
     
 def train_ai(ai: QLearningYahtzee, num_episodes: int = 1000, max_turns: int = 24, num_threads: int = 4):
     lock = threading.Lock()

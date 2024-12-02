@@ -1,3 +1,4 @@
+import os
 import time
 
 from constants import *
@@ -289,6 +290,11 @@ if __name__ == "__main__":
 	root = tk.Tk()
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
-	train_ai(ai, 10000, 24,4)
+	if not os.path.exists(ai.q_table_file):
+		print("Training AI...")
+		train_ai(ai, num_episodes=1000, max_turns=24, num_threads=4)
+		ai.save_q_table()
+	else:
+		print("Q-table loaded. Skipping training.")
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()
