@@ -1,6 +1,5 @@
 import secrets
 from abc import ABC, abstractmethod
-
 from state import *
 import random
 

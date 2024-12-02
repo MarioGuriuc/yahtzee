@@ -1,8 +1,5 @@
-import os
 import time
-
 from constants import *
-from game import *
 from utils import *
 from q_learning import *
 
@@ -292,7 +289,7 @@ if __name__ == "__main__":
 	ai = QLearningYahtzee()
 	if not os.path.exists(ai.q_table_file):
 		print("Training AI...")
-		train_ai(ai, num_episodes=1000, max_turns=24, num_threads=4)
+		ai.train(num_episodes=10000, max_turns=24, num_threads=8)
 		ai.save_q_table()
 	else:
 		print("Q-table loaded. Skipping training.")
