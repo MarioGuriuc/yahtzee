@@ -287,11 +287,8 @@ if __name__ == "__main__":
 	root = tk.Tk()
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
-	if not os.path.exists(ai.q_table_file):
-		print("Training AI...")
-		ai.train(num_episodes=10000, max_turns=24, num_threads=8)
-		ai.save_q_table()
-	else:
-		print("Q-table loaded. Skipping training.")
+	print("Training AI...")
+	ai.train(num_episodes=5000, max_turns=24, num_threads=8)
+	ai.save_q_table()
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()

@@ -24,20 +24,20 @@ class YahtzeeAIBase(ABC):
 	@staticmethod
 	def get_possible_actions(state: State) -> list[Action]:
 		actions = []
-		if state.rolls_left == 0:
+		if state.rolls_left == 0 or len(state.dice_on_table) == 0:
 			return [Action.SCORE]
 		if state.rolls_left == 3:
 			return [Action.ROLL]
 
 		if state.rolls_left > 0:
-			actions.append(Action.ROLL)
+			actions.extend([Action.ROLL])
 		if len(state.dice_on_table) > 0 and state.rolls_left < 3:
-			actions.append(Action.HOLD)
+			actions.extend([Action.HOLD] * 5)
 		if len(state.dice_held) != 0:
-			actions.append(Action.RELEASE)
+			actions.extend([Action.RELEASE] * 5)
 
-		actions.append(Action.SCORE)
-
+		actions.extend([Action.SCORE])
+		random.shuffle(actions)
 		return actions
 
 
@@ -130,3 +130,6 @@ class Yahtzee:
 
 	def reset(self):
 		self.state = State()
+
+	def get_available_categories(self):
+		return [cat for cat, score in self.state.categories[self.state.turn].items() if score == -1]
