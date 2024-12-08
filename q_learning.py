@@ -1,19 +1,24 @@
-import copy
 import csv
 import itertools
 import os
 import threading
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import secrets
-from utils import *
 
-from constants import *
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
 from game import *
 from state import *
+from utils import *
+
+ALPHA = 0.5
+GAMMA = 0.9
+EPSILON = 1.0
+EPSILON_DECAY = 0.9999
+MIN_EPSILON = 0.1
+Q_TABLE = {}
+Q_TABLE_FILE = "q_table.csv"
 
 class QLearningYahtzee(YahtzeeAIBase):
     def __init__(self):
@@ -59,10 +64,10 @@ class QLearningYahtzee(YahtzeeAIBase):
         if np.random.rand() < self.epsilon:
             return secrets.choice(poss_actions)
         else:
-            state_tuple = state.get_state_tuple()
             self.update_q_state_tuple(state)
-            action = Action(np.argmax(self.q_table[state_tuple]))
-            return action if action in poss_actions else secrets.choice(poss_actions)
+            for state_tuple, q_values in self.q_table.items():
+                action = Action(np.argmax(q_values))
+            return action if action in poss_actions else random.choice(poss_actions)
     
     def choose_category(self, state: State) -> Category | None:
         available_categories = [
@@ -74,64 +79,30 @@ class QLearningYahtzee(YahtzeeAIBase):
         return max(available_categories, key=lambda x: x[1])[0]
     
     def choose_hold(self, state: State) -> list[int]:
-        all_dice = state.dice_on_table
-        
-        best_hold = []
-        max_q_value = float('-inf')
-        
-        q_table_index = defaultdict(list)
-        for state_tuple, q_values in self.q_table.items():
-            _, table_dice, held_dice = state_tuple
-            combined_dice = tuple(sorted(table_dice + held_dice))
-            q_table_index[combined_dice].append((state_tuple, q_values))
-        
-        def process_subset(subset):
-            nonlocal max_q_value, best_hold
-            subset_set = set(subset)
+        hold_decision = []
+        for die in state.dice_on_table:
+            q_value = self.get_q_value(state, Action.HOLD)
             
-            for combined_dice, states in q_table_index.items():
-                if subset_set.issubset(combined_dice):
-                    for state_tuple, q_values in states:
-                        q_value = max(q_values)
-                        if q_value > max_q_value:
-                            max_q_value = q_value
-                            best_hold = list(subset)
-        
-        subsets = [list(subset) for r in range(len(all_dice) + 1)
-                   for subset in itertools.combinations(all_dice, r)]
-        with ThreadPoolExecutor() as executor:
-            executor.map(process_subset, subsets)
+            if np.random.rand() < self.epsilon:
+                if np.random.rand() < 0.5:
+                    hold_decision.append(die)
+            else:
+                if q_value > 0:
+                    hold_decision.append(die)
         rnd = secrets.choice(list(itertools.combinations(state.dice_on_table, secrets.choice(range(1, len(state.dice_on_table) + 1)))))
-        return best_hold if len(best_hold) != 0 else rnd
+        return hold_decision if len(hold_decision) != 0 else rnd
 
     def choose_release(self, state: State) -> list[int]:
-        dice_held = state.dice_held
-        
         best_release = []
-        max_q_value = float('-inf')
-        
-        q_table_index = defaultdict(list)
-        for state_tuple, q_values in self.q_table.items():
-            _, table_dice, held_dice = state_tuple
-            combined_dice = tuple(sorted(table_dice + held_dice))
-            q_table_index[combined_dice].append((state_tuple, q_values))
-        
-        def process_subset(subset):
-            nonlocal max_q_value, best_release
-            subset_set = set(subset)
+        for die in state.dice_held:
+            q_value = self.get_q_value(state, Action.RELEASE)
             
-            for combined_dice, states in q_table_index.items():
-                if subset_set.issubset(combined_dice):
-                    for state_tuple, q_values in states:
-                        q_value = q_values[Action.RELEASE]
-                        if q_value > max_q_value:
-                            max_q_value = q_value
-                            best_release = list(subset)
-        
-        subsets = [list(subset) for r in range(len(dice_held) + 1)
-                   for subset in itertools.combinations(dice_held, r)]
-        with ThreadPoolExecutor() as executor:
-            executor.map(process_subset, subsets)
+            if np.random.rand() < self.epsilon:
+                if np.random.rand() < 0.5:
+                    best_release.append(die)
+            else:
+                if q_value > 0:
+                    best_release.append(die)
         rnd = secrets.choice(list(itertools.combinations(state.dice_held, secrets.choice(range(1, len(state.dice_held) + 1)))))
         return best_release if len(best_release) != 0 else rnd
     
@@ -163,7 +134,7 @@ class QLearningYahtzee(YahtzeeAIBase):
             probability = calculate_probability(category, new_dice_held, remaining_rolls)
             potential_score = calculate_score(category, new_dice_held)
             expected_scores.append(probability * potential_score)
-        return sum(expected_scores)
+        return max(expected_scores)
 
     def evaluate_release(self, dice_held, dice_to_release, remaining_rolls, scoring_categories):
         remaining_dice = [die for die in dice_held if die not in dice_to_release]
@@ -172,45 +143,47 @@ class QLearningYahtzee(YahtzeeAIBase):
             probability = calculate_probability(category, remaining_dice, remaining_rolls)
             potential_score = calculate_score(category, remaining_dice)
             expected_scores.append(probability * potential_score)
-        return sum(expected_scores)
+        return max(expected_scores)
     
     def train(self, num_episodes: int = 1000, max_turns: int = 24, num_threads: int = 4):
         lock = threading.Lock()
         total_rewards = [0] * num_episodes
         total_scores = [0] * num_episodes
-    
+        
         def train_in_thread(thread_id: int, start_episode: int, end_episode: int):
             nonlocal total_rewards
             nonlocal total_scores
-            local_ai = copy.deepcopy(self)
+            local_ai = self
             for episode in range(start_episode, end_episode):
                 game = Yahtzee(local_ai)
                 state = game.state
                 total_reward = 0
                 total_score = 0
                 scoring_categories = game.get_available_categories()
-    
+                
                 for turn in range(max_turns):
-    
-                    action = local_ai.choose_action(state)
+                    with lock:
+                        action = local_ai.choose_action(state)
                     reward = 0
-    
+                    
                     match action:
                         case Action.ROLL:
                             game.roll()
-
+                        
                         case Action.HOLD:
                             dice_to_hold = local_ai.choose_hold(state)
-                            reward = self.evaluate_hold(state.dice_held, dice_to_hold, state.rolls_left, scoring_categories)
+                            reward = self.evaluate_hold(state.dice_held, dice_to_hold, state.rolls_left,
+                                                        scoring_categories)
                             for die in dice_to_hold:
                                 game.hold(state.dice_on_table.index(die))
-
+                        
                         case Action.RELEASE:
                             dice_to_release = local_ai.choose_release(state)
-                            reward = self.evaluate_release(state.dice_held, dice_to_release, state.rolls_left, scoring_categories)
+                            reward = self.evaluate_release(state.dice_held, dice_to_release, state.rolls_left,
+                                                           scoring_categories)
                             for die in dice_to_release:
                                 game.release(state.dice_held.index(die))
-
+                        
                         case Action.SCORE:
                             category = local_ai.choose_category(state)
                             if category:
@@ -218,40 +191,41 @@ class QLearningYahtzee(YahtzeeAIBase):
                                 reward = score if score > 0 else -100
                             else:
                                 reward = -100
-    
+                    
                     next_state = game.state
-    
+                    
                     with lock:
                         self.update_q_value(state, action, reward, next_state)
-    
+                    
                     total_reward += reward
                     state = next_state
-    
+                
                 total_rewards[episode] = total_reward
                 total_scores[episode] = game.state.score[0]
-                write_to_csv("q_learning.csv", thread_id, episode+1, total_reward, total_score, local_ai.epsilon)
+                write_to_csv("q_learning.csv", thread_id, episode + 1, total_reward, total_score, local_ai.epsilon)
                 if (episode + 1) % 100 == 0:
-                    print(f"Thread {thread_id}: Episode {episode + 1}, Reward: {total_reward},Epsilon: {local_ai.epsilon}")
-    
+                    print(
+                        f"Thread {thread_id}: Episode {episode + 1}, Reward: {total_reward},Epsilon: {local_ai.epsilon}")
+        
         episodes_per_thread = num_episodes // num_threads
         extra_episodes = num_episodes % num_threads
-    
+        
         ranges = []
         start = 0
         for i in range(num_threads):
             end = start + episodes_per_thread + (1 if i < extra_episodes else 0)
             ranges.append((start, end))
             start = end
-    
+        
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = [
-                executor.submit(train_in_thread, i, start, end)
-                for i, (start, end) in enumerate(ranges)
+                    executor.submit(train_in_thread, i, start, end)
+                    for i, (start, end) in enumerate(ranges)
             ]
-    
+            
             for future in futures:
                 future.result()
-    
+        
         print("Multithreaded training complete!")
         plot_rewards(total_rewards)
 
@@ -267,10 +241,8 @@ def write_to_csv(file_name, thread, episode, reward, score, epsilon):
         
         writer.writerow([thread, episode, reward, score, epsilon])
 
-
 def moving_average(data, window_size=10):
     return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
-
 
 def plot_rewards(rewards):
     plt.figure(figsize=(10, 6))

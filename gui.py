@@ -1,8 +1,6 @@
 import time
-from constants import *
-from utils import *
 from q_learning import *
-
+from constants import *
 
 class YahtzeeApp:
 	def __init__(self, root_param: tk.Tk, game: Yahtzee):
@@ -287,8 +285,7 @@ if __name__ == "__main__":
 	root = tk.Tk()
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
-	print("Training AI...")
-	ai.train(num_episodes=5000, max_turns=24, num_threads=8)
+	ai.train(num_episodes=10000, max_turns=24)
 	ai.save_q_table()
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()
