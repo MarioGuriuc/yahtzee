@@ -1,6 +1,13 @@
+import os
 import time
-from q_learning import *
+import random
+import tkinter as tk
+from q_learning import QLearningYahtzee
 from constants import *
+from game import Yahtzee
+from utils import load_dice_image, load_and_resize_image, create_new_button, create_new_label
+from state import Category, categories, StateType, Action
+
 
 class YahtzeeApp:
 	def __init__(self, root_param: tk.Tk, game: Yahtzee):
@@ -285,7 +292,7 @@ if __name__ == "__main__":
 	root = tk.Tk()
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
-	ai.train(num_episodes=10000, max_turns=24)
-	ai.save_q_table()
+	os.remove(Q_TABLE_FILE) if os.path.exists(Q_TABLE_FILE) else None
+	ai.train(num_episodes=100000, max_turns=24) if not os.path.exists(Q_TABLE_FILE) else ai.load_q_table()
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()

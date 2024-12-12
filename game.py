@@ -31,10 +31,10 @@ class YahtzeeAIBase(ABC):
 
 		if state.rolls_left > 0:
 			actions.extend([Action.ROLL])
-		if len(state.dice_on_table) > 0 and state.rolls_left < 3:
-			actions.extend([Action.HOLD] * 5)
-		if len(state.dice_held) != 0:
-			actions.extend([Action.RELEASE] * 5)
+		if len(state.dice_on_table) > 0 and 1 < state.rolls_left < 3:
+			actions.extend([Action.HOLD])
+		if len(state.dice_held) != 0 and 1 < state.rolls_left < 3:
+			actions.extend([Action.RELEASE])
 
 		actions.extend([Action.SCORE])
 		random.shuffle(actions)
@@ -73,8 +73,6 @@ class Yahtzee:
 		self.state.dice_on_table.append(self.state.dice_held.pop(index))
 
 	def score(self, category: Category):
-		if self.state.categories[self.state.turn][category] != -1:
-			return
 		score = self.calculate_score(category)
 		self.state.categories[self.state.turn][category] = score
 		self.state.score[self.state.turn] += score

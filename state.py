@@ -12,20 +12,18 @@ class Action(Enum):
 	HOLD = 1
 	RELEASE = 2
 	SCORE = 3
-	
-class HoldOption(Enum):
-	HOLD0 = 0
-	HOLD1 = 1
-	HOLD2 = 2
-	HOLD3 = 3
-	HOLD4 = 4
 
-class ReleaseOption(Enum):
-	RELEASE0 = 0
-	RELEASE1 = 1
-	RELEASE2 = 2
-	RELEASE3 = 3
-	RELEASE4 = 4
+	@staticmethod
+	def to_action(action_str: str):
+		match action_str:
+			case "Action.ROLL":
+				return Action.ROLL
+			case "Action.HOLD":
+				return Action.HOLD
+			case "Action.RELEASE":
+				return Action.RELEASE
+			case "Action.SCORE":
+				return Action.SCORE
 
 
 class Category(Enum):
@@ -58,66 +56,20 @@ categories = {
 	"LARGE_STRAIGHT": Category.LARGE_STRAIGHT,
 	"YAHTZEE": Category.YAHTZEE,
 	"CHANCE": Category.CHANCE,
-
 }
 
 empty_category_dict = {cat: -1 for cat in Category}
 
 
 class State:
-	def __init__(self):
+	def __init__(self, dice_held: list[int] = None, dice_on_table: list[int] = None, rolls_left: int = None):
 		self.state_type: StateType = StateType.INITIAL
 		self.turn: int = 0
 		self.score: dict[int, int] = {0: 0, 1: 0}
-		self.rolls_left: int = 3
-		self.dice_held: list[int] = []
-		self.dice_on_table: list[int] = [1, 2, 3, 4, 5]
+		self.rolls_left: int = 3 if rolls_left is None else rolls_left
+		self.dice_held: list[int] = dice_held if dice_held else []
+		self.dice_on_table: list[int] = dice_on_table if dice_on_table else [1, 2, 3, 4, 5]
 		self.categories: list[dict[Category, int]] = [empty_category_dict.copy(), empty_category_dict.copy()]
-  
-	def get_state_tuple(self):
-		return self.rolls_left, tuple(self.dice_on_table), tuple(self.dice_held)
-	
-	def calculate_score(self,Category):
-		dice = self.dice_on_table + self.dice_held
-		if Category == Category.ONES:
-			return dice.count(1)
-		elif Category == Category.TWOS:
-			return dice.count(2) * 2
-		elif Category == Category.THREES:
-			return dice.count(3) * 3
-		elif Category == Category.FOURS:
-			return dice.count(4) * 4
-		elif Category == Category.FIVES:
-			return dice.count(5) * 5
-		elif Category == Category.SIXES:
-			return dice.count(6) * 6
-		elif Category == Category.THREE_OF_A_KIND:
-			return sum(dice) if any(dice.count(x) >= 3 for x in set(dice)) else 0
-		elif Category == Category.FOUR_OF_A_KIND:
-			return sum(dice) if any(dice.count(x) >= 4 for x in set(dice)) else 0
-		elif Category == Category.FULL_HOUSE:
-			return 25 if sorted([dice.count(x) for x in set(dice)]) == [2, 3] else 0
-		elif Category == Category.SMALL_STRAIGHT:
-			if {1, 2, 3, 4}.issubset(dice) or {2, 3, 4, 5}.issubset(dice) or {3, 4, 5, 6}.issubset(dice):
-				return 30
-			return 0
-		elif Category == Category.LARGE_STRAIGHT:
-			if set(dice) == {1, 2, 3, 4, 5} or set(dice) == {2, 3, 4, 5, 6}:
-				return 40
-			return 0
-		elif Category == Category.YAHTZEE:
-			return 50 if len(set(dice)) == 1 else 0
-		elif Category == Category.CHANCE:
-			return sum(dice)
-		return 0
-	
-	def clone(self):
-		new_state = State()
-		new_state.state_type = self.state_type
-		new_state.turn = self.turn
-		new_state.score = self.score.copy()
-		new_state.rolls_left = self.rolls_left
-		new_state.dice_held = self.dice_held.copy()
-		new_state.dice_on_table = self.dice_on_table.copy()
-		new_state.categories = [cat.copy() for cat in self.categories]
-		return new_state
+
+	def __str__(self):
+		return f"State(turn={self.turn}, score={self.score}, rolls_left={self.rolls_left}, dice_held={self.dice_held}, dice_on_table={self.dice_on_table}, categories={self.categories})"
