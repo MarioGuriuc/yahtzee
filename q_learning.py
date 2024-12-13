@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from game import Yahtzee, YahtzeeAIBase
-from state import State, Action, Category
+from state import State, Action, Category, categories
 from utils import calculate_probability, calculate_score
 from constants import *
 
@@ -26,26 +26,27 @@ class QAction:
 				self.action_value = action_value if action_value else None
 
 	def __eq__(self, other):
-		return (self.action == other.action and
-				self.action_value == other.action_value)
+		return True
 
 	def __hash__(self):
-		return hash((self.action, self.action_value))
+		return hash(False)
 
 	def __str__(self):
 		return f"Action: {self.action}, Action Value: {self.action_value}"
 
 
 class StateKey:
-	def __init__(self, state: State):
+	def __init__(self, state: State, available_categories=None):
 		self.dice_held = tuple(sorted(die for die in state.dice_held)) if state.dice_held else ()
 		self.dice_on_table = tuple(sorted(die for die in state.dice_on_table)) if state.dice_on_table else ()
 		self.rolls_left = state.rolls_left
+		self.available_categories = [cat for cat, score in state.categories[state.turn].items() if score == -1 and not available_categories]
 
 	def __eq__(self, other):
 		return (self.dice_held == other.dice_held and
 				self.dice_on_table == other.dice_on_table and
-				self.rolls_left == other.rolls_left)
+				self.rolls_left == other.rolls_left and
+    			self.available_categories == other.available_categories)
 
 	def __hash__(self):
 		return hash((self.dice_held, self.dice_on_table, self.rolls_left))
@@ -56,6 +57,7 @@ class StateKey:
 
 class QLearningYahtzee(YahtzeeAIBase):
 	def __init__(self):
+		self.previous_action: Action = None
 		self.alpha = ALPHA
 		self.gamma = GAMMA
 		self.epsilon = EPSILON
@@ -69,39 +71,35 @@ class QLearningYahtzee(YahtzeeAIBase):
 			self.add_missing_state_to_table(state)
 		return self.q_table[state_key][q_action]
 
-	def get_max_q_value(self, state: State):
-		state_key = StateKey(state)
-		if state_key not in self.q_table:
-			self.add_missing_state_to_table(state)
-		return max(self.q_table[state_key].values())
-
 	def add_missing_state_to_table(self, state: State):
 		state_key = StateKey(state)
 		if state_key not in self.q_table:
 			self.q_table[state_key] = {}
 
-		for action in self.get_possible_actions(state):
-			match action:
-				case Action.ROLL:
-					if state.rolls_left == 0:
-						continue
-					self.q_table[state_key][QAction(action)] = 0
-				case Action.HOLD:
-					random_dice_to_hold = random.sample(state.dice_on_table,
-														random.randint(1, max(1, len(state.dice_on_table) - 1)))
-					self.q_table[state_key][QAction(action, action_value=tuple(random_dice_to_hold))] = 0
-				case Action.RELEASE:
-					random_dice_to_release = random.sample(state.dice_held,
-														   random.randint(1, max(1, len(state.dice_held) - 1)))
-					self.q_table[state_key][QAction(action, action_value=tuple(random_dice_to_release))] = 0
-				case Action.SCORE:
-					random_category = random.choice(
-						[cat for cat, score in state.categories[state.turn].items() if score == -1])
-					category_score = calculate_score(random_category, state.dice_on_table + state.dice_held)
-					self.q_table[state_key][QAction(action, action_value=random_category)] = category_score
+		action = random.choice(self.get_possible_actions(state, self.previous_action))
+		match action:
+			case Action.ROLL:
+				if state.rolls_left == 0:
+					return
+				self.q_table[state_key][QAction(action)] = 0
+			case Action.HOLD:
+				dice_len = len(state.dice_on_table)
+				dice_to_hold_len = random.randint(1, max(1, dice_len - 1))
+				dice_to_hold = random.sample(state.dice_on_table, dice_to_hold_len)
+				self.q_table[state_key][QAction(action, action_value=tuple(dice_to_hold))] = 0
+			case Action.RELEASE:
+				dice_len = len(state.dice_held)
+				dice_to_release_len = random.randint(1, max(1, dice_len - 1))
+				dice_to_release = random.sample(state.dice_held, dice_to_release_len)
+				self.q_table[state_key][QAction(action, action_value=tuple(dice_to_release))] = 0
+			case Action.SCORE:
+				random_category = random.choice(
+					[cat for cat, score in state.categories[state.turn].items() if score == -1])
+				category_score = calculate_score(random_category, state.dice_on_table + state.dice_held)
+				self.q_table[state_key][QAction(action, action_value=random_category)] = category_score
 
 	def update_q_value(self, state: State, q_action: QAction, reward: int,
-					   next_state: State):
+					   next_state: State, writer=None):
 		state_key = StateKey(state)
 		next_state_key = StateKey(next_state)
 
@@ -114,29 +112,39 @@ class QLearningYahtzee(YahtzeeAIBase):
 		best_next_q = 0
 		if next_state_key in self.q_table:
 			for next_q_action, q_value in self.q_table[next_state_key].items():
-				if (next_q_action.action == q_action.action and
-						next_q_action.action_value == q_action.action_value):
-					best_next_q = q_value
-					break
-
+				best_next_q = max(best_next_q, q_value)
+				
 		current_q = self.get_q_value(state, q_action)
 		new_q = current_q + self.alpha * (reward + self.gamma * best_next_q - current_q)
 		self.q_table[state_key][q_action] = new_q
+		
+		available_categories_str = [str_cat for str_cat, cat in categories.items() if cat in state_key.available_categories]
+		writer.writerow([state_key.dice_held, state_key.dice_on_table, state_key.rolls_left, available_categories_str,
+       						q_action.action, q_action.action_value, new_q]) if writer else None
+  
 		return new_q
 
 	def choose_action(self, state: State):
 		if random.uniform(0, 1) < self.epsilon:
-			action = random.choice(self.get_possible_actions(state))
+			action = random.choice(self.get_possible_actions(state, self.previous_action))
+			self.previous_action = action
 			return action
 		else:
-			state_key = StateKey(state)
-			if state_key not in self.q_table:
-				self.add_missing_state_to_table(state)
-			action = max(self.q_table[state_key], key=self.q_table[state_key].get).action
-			if action not in self.get_possible_actions(state):
-				self.q_table[state_key].pop(max(self.q_table[state_key], key=self.q_table[state_key].get))
-				return random.choice(self.get_possible_actions(state))
+			action = self.choose_informed_action(state)
+			self.previous_action = action
 			return action
+
+	def choose_informed_action(self, state: State):
+		state_key = StateKey(state)
+		if state_key not in self.q_table:
+			self.add_missing_state_to_table(state)
+   
+		action = max(self.q_table[state_key], key=self.q_table[state_key].get).action
+		if action not in self.get_possible_actions(state, self.previous_action):
+			self.q_table[state_key].pop(max(self.q_table[state_key], key=self.q_table[state_key].get))
+			return self.choose_informed_action(state)
+		
+		return action
 
 	def choose_hold(self, state: State):
 		def random_hold():
@@ -158,7 +166,7 @@ class QLearningYahtzee(YahtzeeAIBase):
 		if max_q_action.action_value is None:
 			return random_hold()
 
-		dice_to_hold = [die for die in state.dice_on_table if die in max_q_action.action_value]
+		dice_to_hold = [die for die in max_q_action.action_value]
 		if not dice_to_hold:
 			return random_hold()
 
@@ -185,7 +193,7 @@ class QLearningYahtzee(YahtzeeAIBase):
 		if max_q_action.action_value is None:
 			return random_release()
 
-		dice_to_release = [die for die in state.dice_held if die in max_q_action.action_value]
+		dice_to_release = [die for die in max_q_action.action_value]
 		if not dice_to_release:
 			return random_release()
 
@@ -209,7 +217,7 @@ class QLearningYahtzee(YahtzeeAIBase):
 			probability = calculate_probability(category, new_dice_held, remaining_rolls)
 			potential_score = calculate_score(category, new_dice_held)
 			expected_scores.append(probability * potential_score)
-		return sum(expected_scores)
+		return sum(expected_scores) + len(set(dice_to_hold)) * 0.1
 
 	def evaluate_release(self, dice_held, dice_to_release, remaining_rolls, scoring_categories):
 		remaining_dice = [die for die in dice_held if die not in dice_to_release]
@@ -218,23 +226,26 @@ class QLearningYahtzee(YahtzeeAIBase):
 			probability = calculate_probability(category, remaining_dice, remaining_rolls)
 			potential_score = calculate_score(category, remaining_dice)
 			expected_scores.append(probability * potential_score)
-		return sum(expected_scores)
+		return sum(expected_scores) - len(dice_to_release) * 0.1
+
 
 	def save_q_table(self):
 		with open(Q_TABLE_FILE, mode='w', newline='') as file:
 			writer = csv.writer(file)
-			writer.writerow(["Dice Held", "Dice On Table", "Rolls Left", "Action", "Action Value", "Q-Value"])
+			writer.writerow(["Dice Held", "Dice On Table", "Rolls Left", "Available Categories", "Action", "Action Value", "Q-Value"])
 			for state_key, q_values in self.q_table.items():
+				available_categories_str = [str_cat for str_cat, cat in categories.items() if cat in state_key.available_categories]
 				for q_action, q_value in q_values.items():
 					writer.writerow(
-						[state_key.dice_held, state_key.dice_on_table, state_key.rolls_left, q_action.action,
-						 q_action.action_value, q_value])
+						[state_key.dice_held, state_key.dice_on_table, state_key.rolls_left, available_categories_str,
+       						q_action.action, q_action.action_value, q_value])
 
 	def load_q_table(self):
 		if os.path.exists(Q_TABLE_FILE):
 			df = pd.read_csv(Q_TABLE_FILE)
 			for index, row in df.iterrows():
-				state_key = StateKey(State(row["Dice Held"], row["Dice On Table"], row["Rolls Left"]))
+				available_categories = [cat for cat_str, cat in categories.items() if cat_str in row["Available Categories"]]
+				state_key = StateKey(State(row["Dice Held"], row["Dice On Table"], row["Rolls Left"]), available_categories)
 				action_value = row["Action Value"] if not pd.isna(row["Action Value"]) else None
 				action = Action.to_action(row["Action"])
 				q_action = QAction(action, action_value)
@@ -258,54 +269,51 @@ class QLearningYahtzee(YahtzeeAIBase):
 				j += 1
 			i += 1
 
-	def evaluate_reward(self, state: State, q_action: QAction, previous_action: Action,
-						scoring_categories: list[Category]) -> int:
-		reward = 0
+	def evaluate_reward(self, state: State, q_action: QAction, scoring_categories: list[Category]) -> float:
+		reward = 0.0
+
 		match q_action.action:
 			case Action.ROLL:
-				if previous_action == Action.HOLD or previous_action == Action.RELEASE:
-					reward += 10
-				if state.rolls_left == 2:
-					reward -= 10
+				reward += 0.1 * state.rolls_left
 			case Action.HOLD:
-				if previous_action == Action.HOLD or previous_action == Action.RELEASE:
-					reward -= 10
-				if state.rolls_left == 2:
-					reward += 10
-				if q_action.action_value and len(q_action.action_value) == len(state.dice_on_table):
-					reward -= 10
-				reward += self.evaluate_hold(state.dice_held, q_action.action_value, state.rolls_left,
-											 scoring_categories)
+				reward += self.evaluate_hold(state.dice_held, q_action.action_value, state.rolls_left, scoring_categories)
 			case Action.RELEASE:
-				if previous_action == Action.RELEASE or previous_action == Action.HOLD:
-					reward -= 10
-				if state.rolls_left == 2:
-					reward += 10
-				if q_action.action_value and len(q_action.action_value) == len(state.dice_held):
-					reward -= 25
-				reward += self.evaluate_release(state.dice_held, q_action.action_value, state.rolls_left,
-												scoring_categories)
+				reward += self.evaluate_release(state.dice_held, q_action.action_value, state.rolls_left, scoring_categories)
 			case Action.SCORE:
-				if previous_action == Action.HOLD or previous_action == Action.RELEASE:
-					reward -= 10
-				if state.rolls_left == 2:
-					reward -= 10
-				reward += calculate_score(q_action.action_value, state.dice_on_table + state.dice_held)
+				achieved_score = calculate_score(q_action.action_value, state.dice_on_table + state.dice_held)
+				reward += achieved_score * 2
+
+		for category in scoring_categories:
+			probability = calculate_probability(category, state.dice_on_table + state.dice_held, state.rolls_left)
+			potential_score = calculate_score(category, state.dice_on_table + state.dice_held)
+			reward += probability * potential_score * 0.5
+
+		if state.rolls_left == 0 and not state.dice_held:
+			reward -= 0.5
+
+		high_value = [Category.YAHTZEE, Category.LARGE_STRAIGHT, Category.FOUR_OF_A_KIND]
+		for category in high_value:
+			probability = calculate_probability(category, state.dice_held, state.rolls_left)
+			reward += probability * 2
+
 		return reward
 
-	def train(self, num_episodes=1000, max_turns=24):
-		q_values = []
+	def train(self, num_episodes=1000, max_turns=12):
+		rewards_per_episode = []
+		file = open(Q_TABLE_FILE, mode='w', newline='')
+		writer = csv.writer(file)
+		writer.writerow(["Dice Held", "Dice On Table", "Rolls Left", "Available Categories", "Action", "Action Value", "Q-Value"])
+		
 		for episode in range(num_episodes):
 			game = Yahtzee(self)
 			state = game.state
-			previous_action = None
+			turn = 1
 			nr_of_rolls_per_turn = 0
-			rewards_per_episode = []
 			total_reward = 0
 
 			for turn in range(max_turns):
 				reward = 0
-				scoring_categories = game.get_available_categories()
+				available_categories = game.get_available_categories()
 				action = self.choose_action(state)
 				q_action = None
 				match action:
@@ -329,25 +337,24 @@ class QLearningYahtzee(YahtzeeAIBase):
 					case Action.SCORE:
 						category = self.choose_category(state)
 						q_action = QAction(action, action_value=category)
+						game.score(category)
 
-				reward += self.evaluate_reward(state, q_action, previous_action, scoring_categories)
+				reward += self.evaluate_reward(state, q_action, available_categories)
 				total_reward += reward
 				next_state = game.state
-				q_value = self.update_q_value(state, q_action, reward, next_state)
-				q_values.append(q_value)
+				q_value = self.update_q_value(state, q_action, reward, next_state, writer=writer)
 				state = next_state
-				previous_action = action
 				nr_of_rolls_per_turn = 0
 
 			self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
 
 			if (episode + 1) % 1000 == 0:
-				print(f"Episode {episode + 1}: Total Reward = {reward}, Epsilon = {self.epsilon}")
+				print(f"Episode {episode + 1}: Total Reward = {total_reward}, Epsilon = {self.epsilon}")
 			rewards_per_episode.append(total_reward)
 
 		print("Training complete!")
-		plot_rewards(q_values)
-		self.save_q_table()
+		# plot_rewards(rewards_per_episode)
+		# self.save_q_table()
 
 
 def plot_rewards(rewards):

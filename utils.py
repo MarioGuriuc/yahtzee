@@ -128,7 +128,7 @@ def calculate_probability(category: Category, current_dice: list, remaining_roll
         return 0.3
 
     elif category == Category.CHANCE:
-        return 1.0
+        return 0.1
 
     else:
         return 0.0

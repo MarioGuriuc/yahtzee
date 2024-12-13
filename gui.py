@@ -293,6 +293,6 @@ if __name__ == "__main__":
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
 	os.remove(Q_TABLE_FILE) if os.path.exists(Q_TABLE_FILE) else None
-	ai.train(num_episodes=100000, max_turns=24) if not os.path.exists(Q_TABLE_FILE) else ai.load_q_table()
+	ai.train(num_episodes=100_000) if not os.path.exists(Q_TABLE_FILE) else ai.load_q_table()
 	app = YahtzeeApp(root, Yahtzee(ai))
 	root.mainloop()
