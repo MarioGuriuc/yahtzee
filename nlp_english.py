@@ -6,12 +6,13 @@ from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
 from nltk.probability import FreqDist
 from nltk.corpus import stopwords
-from nltk import download
+from nltk import download, pos_tag
 import random
 #---------------------------------------
 download("punkt")
 download("wordnet")
 download("stopwords")
+download('averaged_perceptron_tagger_eng')
 #---------------------------------------
 
 def read_text(input_source):
@@ -22,10 +23,8 @@ def read_text(input_source):
 		text = input_source
 	return text
 
-
 def detect_language(text):
 	return detect(text)
-
 
 def stylometric_analysis(text):
 	"""
@@ -52,7 +51,6 @@ def stylometric_analysis(text):
 			"char_count"      : char_count,
 			"word_frequencies": word_frequencies.most_common(10),
 	}
-
 
 def generate_alternatives(text):
 	"""
@@ -81,26 +79,44 @@ def generate_alternatives(text):
 			new_text.append(word)
 	return " ".join(new_text)
 
-
-def extract_keywords_and_generate_sentences(text):
+def extract_keywords_and_generate_sentences(text, num_keywords=5):
 	"""
-    Extracts keywords from the text and generates sentences for each keyword.
+	Extracts keywords from the text and generates meaningful sentences for each keyword.
 
-    Uses NLTK to filter out stopwords and find the most frequent words (keywords).
-    Creates simple sentences incorporating each keyword.
+	Uses NLTK for tokenization, filtering stopwords, and determining the most frequent words.
+	Generates contextually appropriate sentences for each keyword based on its part of speech (POS).
 
-    Args:
-        text (str): Input text.
+	Args:
+		text (str): Input text.
+		num_keywords (int): Number of top keywords to extract.
 
-    Returns:
-        list: List of sentences generated using the extracted keywords.
-    """
+	Returns:
+		list: List of sentences generated using the extracted keywords.
+	"""
 	stop_words = set(stopwords.words("english"))
 	words = word_tokenize(text)
-	filtered_words = [word for word in words if word.isalnum() and word.lower() not in stop_words]
+	
+	# Filter words: remove stopwords, punctuation, and convert to lowercase
+	filtered_words = [word.lower() for word in words if word.isalnum() and word.lower() not in stop_words]
+	
+	# Frequency distribution to get top keywords
 	fdist = FreqDist(filtered_words)
-	keywords = [word for word, freq in fdist.most_common(5)]
-	sentences = [f"The text discusses {keyword}." for keyword in keywords]
+	keywords = [word for word, freq in fdist.most_common(num_keywords)]
+	
+	# Generate sentences based on POS tagging
+	sentences = []
+	for keyword in keywords:
+		pos = pos_tag([keyword])[0][1]  # Get part of speech for the keyword
+		
+		if pos.startswith('NN'):  # Noun
+			sentences.append(f"The text highlights the importance of {keyword}.")
+		elif pos.startswith('VB'):  # Verb
+			sentences.append(f"The text emphasizes the act of {keyword}.")
+		elif pos.startswith('JJ'):  # Adjective
+			sentences.append(f"The text describes something as {keyword}.")
+		else:  # Generic fallback
+			sentences.append(f"The text discusses {keyword}.")
+	
 	return sentences
 
 
