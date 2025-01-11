@@ -1,11 +1,15 @@
 import os
+import threading
 import time
 import random
 import tkinter as tk
+
+from chatbot import ChatBotApp
 from q_learning import QLearningYahtzee
 from constants import *
 from game import Yahtzee
-from utils import load_dice_image, load_and_resize_image, create_new_button, create_new_label
+from utils import load_dice_image, load_and_resize_image, create_new_button, create_new_label, serialize_game_state, \
+	serialize_score_for_category
 from state import Category, categories, StateType, Action
 
 
@@ -162,6 +166,10 @@ class YahtzeeApp:
 			self.update_possible_score_labels()
 			self.update_rolls_left_label()
 			self.roll_dice_button.config(state=tk.NORMAL) if self.game.state.turn == 0 else None
+			if hasattr(self, 'chatbot_app'):
+				self.chatbot_app.update_game_state(serialize_game_state(self.game.state))
+				dice = self.game.state.dice_on_table + self.game.state.dice_held
+				self.chatbot_app.update_score_for_category(serialize_score_for_category(dice))
 
 	def toggle_dice_hold(self, dice_index: int) -> None:
 		if dice_index < len(
@@ -269,6 +277,7 @@ class YahtzeeApp:
 			self.update_rolls_left_label()
 			self.draw_dice()
 
+
 	def reset_game(self) -> None:
 		self.game.reset()
 		self.draw_dice()
@@ -288,11 +297,20 @@ class YahtzeeApp:
 				widget.destroy()
 
 
+def start_chatbot(chatbot_app_class, state):
+	root = tk.Tk()
+	app = chatbot_app_class(root, state)
+	root.mainloop()
+
+
 if __name__ == "__main__":
 	root = tk.Tk()
 	# ai = RandomYahtzeeAI()
 	ai = QLearningYahtzee()
-	os.remove(Q_TABLE_FILE) if os.path.exists(Q_TABLE_FILE) else None
+	# os.remove(Q_TABLE_FILE) if os.path.exists(Q_TABLE_FILE) else None
 	ai.train(num_episodes=100_000) if not os.path.exists(Q_TABLE_FILE) else ai.load_q_table()
-	app = YahtzeeApp(root, Yahtzee(ai))
+	game = Yahtzee(ai)
+	app = YahtzeeApp(root, game)
+	chatbot_thread = threading.Thread(target=start_chatbot, args=(ChatBotApp, game.state), daemon=True)
+	chatbot_thread.start()
 	root.mainloop()

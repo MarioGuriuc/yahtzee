@@ -1,5 +1,6 @@
 Pillow~=11.0.0
 numpy~=2.1.3
-matplotlib
+matplotlib~=3.9.3
 pandas~=2.2.3
 Tk
+openai~=1.59.6
