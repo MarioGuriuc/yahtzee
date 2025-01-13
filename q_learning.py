@@ -296,7 +296,6 @@ class QLearningYahtzee(YahtzeeAIBase, ABC):
 		for episode in range(num_episodes):
 			game = Yahtzee(self)
 			state = game.state
-			turn = 1
 			nr_of_rolls_per_turn = 0
 			total_reward = 0
 
