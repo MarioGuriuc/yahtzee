@@ -1,1 +1,7 @@
-Pillow
+Pillow~=11.1.0
+numpy~=2.1.3
+matplotlib~=3.9.3
+pandas~=2.2.3
+Tk
+openai~=1.59.6
+customtkinter~=5.2.2

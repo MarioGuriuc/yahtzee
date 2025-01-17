@@ -1,6 +1,5 @@
 import secrets
 from abc import ABC, abstractmethod
-
 from state import *
 import random
 
@@ -23,20 +22,22 @@ class YahtzeeAIBase(ABC):
 		pass
 
 	@staticmethod
-	def get_possible_actions(state: State) -> list[Action]:
+	def get_possible_actions(state: State, previous_action: Action) -> list[Action]:
+		actions = []
 		if state.rolls_left == 0:
 			return [Action.SCORE]
+		if state.rolls_left == 3:
+			return [Action.ROLL]
 
-		actions = []
 		if state.rolls_left > 0:
-			actions.append(Action.ROLL)
-		if len(state.dice_on_table) > 0 and state.rolls_left < 3:
-			actions.append(Action.HOLD)
-			actions.append(Action.SCORE)
-		if len(state.dice_held) != 0:
-			actions.append(Action.RELEASE)
-			actions.append(Action.SCORE)
-
+			actions.extend([Action.ROLL])
+		if len(state.dice_on_table) > 0 and 1 < state.rolls_left < 3 and (Action.HOLD != previous_action and previous_action != Action.RELEASE):
+			actions.extend([Action.HOLD] * 5)
+		if len(state.dice_held) != 0 and 1 < state.rolls_left < 3 and (Action.HOLD != previous_action and previous_action != Action.RELEASE):
+			actions.extend([Action.RELEASE] * 10)
+		if Action.HOLD != previous_action and previous_action != Action.RELEASE:
+			actions.extend([Action.SCORE])
+   
 		return actions
 
 
@@ -72,8 +73,6 @@ class Yahtzee:
 		self.state.dice_on_table.append(self.state.dice_held.pop(index))
 
 	def score(self, category: Category):
-		if self.state.categories[self.state.turn][category] != -1:
-			return
 		score = self.calculate_score(category)
 		self.state.categories[self.state.turn][category] = score
 		self.state.score[self.state.turn] += score
@@ -129,3 +128,6 @@ class Yahtzee:
 
 	def reset(self):
 		self.state = State()
+
+	def get_available_categories(self):
+		return [cat for cat, score in self.state.categories[self.state.turn].items() if score == -1]
